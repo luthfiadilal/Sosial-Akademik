@@ -85,5 +85,40 @@ func SetupRoutes(r *gin.Engine) {
 			lms.GET("/class/:class_id/quizzes", handlers.GetQuizzes)
 			lms.GET("/class/:class_id/forums", handlers.GetForums)
 		}
+
+		// Sosial Media Routes
+		sosial := protected.Group("/sosial")
+		{
+			// User Profiles
+			sosial.GET("/users/:username/profile", handlers.GetSocialProfile)
+			sosial.PUT("/users/profile", handlers.UpdateSocialProfile)
+
+			// Posts
+			sosial.GET("/posts", handlers.GetPosts)
+			sosial.POST("/posts", handlers.CreatePost)
+			sosial.DELETE("/posts/:id", handlers.DeletePost)
+			
+			// Interactions
+			sosial.POST("/posts/:id/like", handlers.LikePost)
+			sosial.POST("/posts/:id/comment", handlers.CommentOnPost)
+			sosial.GET("/posts/:id/comments", handlers.GetPostComments)
+			sosial.DELETE("/posts/comments/:id", handlers.DeleteComment)
+			sosial.POST("/posts/:id/share", handlers.SharePost)
+			
+			// Network
+			sosial.POST("/users/:id/follow", handlers.FollowUser)
+		}
+
+		// Chat & Messaging Routes
+		chat := protected.Group("/chat")
+		{
+			chat.GET("/conversations", handlers.GetConversations)
+			chat.POST("/conversations", handlers.CreateConversation)
+			chat.GET("/conversations/:id/messages", handlers.GetConversationMessages)
+			chat.POST("/conversations/:id/messages", handlers.SendMessage)
+		}
+
+		// WebSockets Route
+		protected.GET("/ws", handlers.ServeWS)
 	}
 }

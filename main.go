@@ -5,7 +5,9 @@ import (
 	"net/http"
 
 	"akademik-backend/config"
+	"akademik-backend/handlers"
 	"akademik-backend/routes"
+	"akademik-backend/ws"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -19,6 +21,10 @@ func main() {
 
 	// Initialize Database Connection
 	config.ConnectDatabase()
+
+	// Initialize WebSocket Hub
+	handlers.AppHub = ws.NewHub()
+	go handlers.AppHub.Run()
 
 	r := gin.Default()
 
