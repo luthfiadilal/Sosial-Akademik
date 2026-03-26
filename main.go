@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"akademik-backend/config"
+	"akademik-backend/routes"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -42,34 +43,8 @@ func main() {
 		})
 	})
 
-	// Group Route untuk modul
-	api := r.Group("/api/v1")
-	{
-		// Akademik Routes
-		akademik := api.Group("/akademik")
-		{
-			akademik.GET("/krs", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"message": "KRS Data"}) })
-			akademik.GET("/transkrip", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"message": "Transkrip Data"}) })
-		}
-
-		// Keuangan Routes
-		keuangan := api.Group("/keuangan")
-		{
-			keuangan.GET("/tagihan", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"message": "Tagihan UKT"}) })
-		}
-
-		// Administratif Routes
-		admin := api.Group("/administratif")
-		{
-			admin.GET("/pengajuan", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"message": "Daftar Pengajuan"}) })
-		}
-
-		// Sosial Routes
-		sosial := api.Group("/sosial")
-		{
-			sosial.GET("/feed", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"message": "Sosial Feed Data"}) })
-		}
-	}
+	// Panggil Modular Routes
+	routes.SetupRoutes(r)
 
 	log.Println("Server running on port 8080...")
 	r.Run(":8080")
