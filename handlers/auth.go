@@ -5,6 +5,7 @@ import (
 	"akademik-backend/models"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -31,10 +32,14 @@ func generateToken(user models.User) (string, error) {
 
 func Register(c *gin.Context) {
 	var input struct {
-		Name     string `json:"name" binding:"required"`
-		Email    string `json:"email" binding:"required,email"`
-		Password string `json:"password" binding:"required,min=6"`
-		Role     string `json:"role"`
+		Name           string `json:"name" binding:"required"`
+		Email          string `json:"email" binding:"required,email"`
+		Password       string `json:"password" binding:"required,min=6"`
+		Role           string `json:"role"`
+		Npm            string `json:"npm"`
+		Nidn           string `json:"nidn"`
+		StudyProgramID uint   `json:"study_program_id"`
+		Angkatan       string `json:"angkatan"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -70,10 +75,59 @@ func Register(c *gin.Context) {
 		IsActive: true,
 	}
 
-	if err := config.DB.Create(&user).Error; err != nil {
+	tx := config.DB.Begin()
+
+	if err := tx.Create(&user).Error; err != nil {
+		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 		return
 	}
+
+	// Buat Role Profile Spesifik
+	switch role {
+	case "mahasiswa":
+		student := models.Student{
+			UserID:         user.ID,
+			NPM:            input.Npm,
+			StudyProgramID: input.StudyProgramID,
+			Angkatan:       input.Angkatan,
+			Status:         "aktif",
+		}
+		if student.NPM == "" {
+			student.NPM = "NPM-" + strconv.FormatInt(time.Now().Unix(), 10)
+		}
+		if student.StudyProgramID == 0 {
+			student.StudyProgramID = 1
+		}
+		if student.Angkatan == "" {
+			student.Angkatan = strconv.Itoa(time.Now().Year())
+		}
+		if err := tx.Create(&student).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create student profile: " + err.Error()})
+			return
+		}
+
+	case "dosen":
+		lecturer := models.Lecturer{
+			UserID: user.ID,
+			NIDN:   input.Nidn,
+		}
+		if lecturer.NIDN == "" {
+			lecturer.NIDN = "NIDN-" + strconv.FormatInt(time.Now().Unix(), 10)
+		}
+		if input.StudyProgramID != 0 {
+			spid := input.StudyProgramID
+			lecturer.StudyProgramID = &spid
+		}
+		if err := tx.Create(&lecturer).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create lecturer profile: " + err.Error()})
+			return
+		}
+	}
+
+	tx.Commit()
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "User registered successfully",
@@ -142,16 +196,30 @@ func GetProfile(c *gin.Context) {
 		return
 	}
 
+	profileData := gin.H{
+		"id":         user.ID,
+		"name":       user.Name,
+		"email":      user.Email,
+		"role":       user.Role,
+		"is_active":  user.IsActive,
+		"created_at": user.CreatedAt,
+		"updated_at": user.UpdatedAt,
+	}
+
+	// Load specific role profile
+	switch user.Role {
+	case "mahasiswa":
+		var student models.Student
+		config.DB.Where("user_id = ?", user.ID).First(&student)
+		profileData["student_details"] = student
+	case "dosen":
+		var lecturer models.Lecturer
+		config.DB.Where("user_id = ?", user.ID).First(&lecturer)
+		profileData["lecturer_details"] = lecturer
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"id":         user.ID,
-			"name":       user.Name,
-			"email":      user.Email,
-			"role":       user.Role,
-			"is_active":  user.IsActive,
-			"created_at": user.CreatedAt,
-			"updated_at": user.UpdatedAt,
-		},
+		"data": profileData,
 	})
 }
 
@@ -163,8 +231,12 @@ func EditProfile(c *gin.Context) {
 	}
 
 	var input struct {
-		Name  string `json:"name"`
-		Email string `json:"email"`
+		Name           string `json:"name"`
+		Email          string `json:"email"`
+		Npm            string `json:"npm"`
+		Nidn           string `json:"nidn"`
+		StudyProgramID uint   `json:"study_program_id"`
+		Angkatan       string `json:"angkatan"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -186,8 +258,38 @@ func EditProfile(c *gin.Context) {
 	}
 
 	if err := config.DB.Save(&user).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user base profile"})
 		return
+	}
+
+	// Memperbarui profil role spesifik
+	switch user.Role {
+	case "mahasiswa":
+		var student models.Student
+		if err := config.DB.Where("user_id = ?", user.ID).First(&student).Error; err == nil {
+			if input.Npm != "" {
+				student.NPM = input.Npm
+			}
+			if input.StudyProgramID != 0 {
+				student.StudyProgramID = input.StudyProgramID
+			}
+			if input.Angkatan != "" {
+				student.Angkatan = input.Angkatan
+			}
+			config.DB.Save(&student)
+		}
+	case "dosen":
+		var lecturer models.Lecturer
+		if err := config.DB.Where("user_id = ?", user.ID).First(&lecturer).Error; err == nil {
+			if input.Nidn != "" {
+				lecturer.NIDN = input.Nidn
+			}
+			if input.StudyProgramID != 0 {
+				spid := input.StudyProgramID
+				lecturer.StudyProgramID = &spid
+			}
+			config.DB.Save(&lecturer)
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Profile updated successfully", "data": gin.H{"name": user.Name, "email": user.Email}})
